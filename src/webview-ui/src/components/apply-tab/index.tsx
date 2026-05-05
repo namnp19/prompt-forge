@@ -43,6 +43,7 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 		setIsApplying(true)
 		setResults(null)
 		setErrors(null)
+		setRowResults({})
 
 		// Preprocess the text before sending
 		const { text: cleaned, changes, issues } = preprocessXmlText(responseText)
@@ -113,9 +114,27 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 				if (message.success) {
 					setResults(message.results || [])
 					setErrors(null)
+					// Map results vào rowResults theo index để hiển thị inline
+					// message trong PreviewTable (khi previewData đang tồn tại)
+					if (message.results && message.results.length > 0) {
+						const newRowResults: Record<number, RowResult> = {}
+						for (let i = 0; i < message.results.length; i++) {
+							const result = message.results[i]
+							if (result) {
+								newRowResults[i] = {
+									success: result.success,
+									message: result.message,
+								}
+							}
+						}
+						setRowResults(newRowResults)
+					}
 				} else {
 					setErrors(message.errors || ['Unknown error occurred'])
 					setResults(null)
+					// Clear previewData để ResultsDisplay hiện ra với error message
+					// (trường hợp lỗi parse-level / exception - không có results per-row)
+					setPreviewData(null)
 				}
 			}
 

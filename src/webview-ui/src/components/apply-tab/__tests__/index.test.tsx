@@ -83,6 +83,29 @@ vi.mock('../results-display', () => ({
 	),
 }))
 
+vi.mock('../preview-table', () => ({
+	default: ({
+		previewData,
+		rowResults,
+	}: {
+		previewData: { rows: Array<{ path: string }>; errors: string[] } | null
+		rowResults: Record<number, { success: boolean; message: string }>
+	}) => (
+		<div data-testid="mock-preview-table">
+			{previewData?.rows.map((row, i) => (
+				<div key={i} data-testid={`row-${i}`}>
+					<span data-testid={`row-${i}-path`}>{row.path}</span>
+					{rowResults[i] && (
+						<span data-testid={`row-${i}-result`}>
+							{rowResults[i].success ? '✓' : '✗'} {rowResults[i].message}
+						</span>
+					)}
+				</div>
+			))}
+		</div>
+	),
+}))
+
 describe('ApplyTab', () => {
 	const mockOnApply = vi.fn()
 	const mockOnPreview = vi.fn()
@@ -296,5 +319,165 @@ describe('ApplyTab', () => {
 		// Errors should be cleared
 		expect(screen.queryByTestId('errors')).toBeNull()
 		expect(mockOnPreview).toHaveBeenCalledWith('<file>new content</file>')
+	})
+
+	it('maps applyChangesResult results to rowResults for inline feedback in PreviewTable', async () => {
+		render(<ApplyTab onApply={mockOnApply} onPreview={mockOnPreview} />)
+
+		// First, establish previewData via previewChangesResult
+		const previewMessage: ApplyChangeResponse = {
+			command: 'previewChangesResult',
+			success: true,
+			previewData: {
+				rows: [
+					{
+						path: 'src/foo.ts',
+						action: 'modify',
+						description: 'Update foo',
+						changes: { added: 2, removed: 1 },
+					},
+					{
+						path: 'src/bar.ts',
+						action: 'rewrite',
+						description: 'Rewrite bar',
+						changes: { added: 10, removed: 5 },
+					},
+				],
+				errors: [],
+			},
+		}
+		fireEvent(window, new MessageEvent('message', { data: previewMessage }))
+
+		await waitFor(() => {
+			expect(screen.getByTestId('mock-preview-table')).toBeInTheDocument()
+		})
+
+		// Now apply all — one patch succeeds, one fails
+		const applyAllMessage: ApplyChangeResponse = {
+			command: 'applyChangesResult',
+			success: true,
+			results: [
+				{
+					path: 'src/foo.ts',
+					action: 'modify',
+					success: true,
+					message: 'Applied successfully',
+				},
+				{
+					path: 'src/bar.ts',
+					action: 'rewrite',
+					success: false,
+					message: 'Search text not found',
+				},
+			],
+		}
+		fireEvent(window, new MessageEvent('message', { data: applyAllMessage }))
+
+		await waitFor(() => {
+			// Row 0 should show success inline message
+			expect(screen.getByTestId('row-0-result')).toHaveTextContent(
+				'✓ Applied successfully',
+			)
+			// Row 1 should show error inline message
+			expect(screen.getByTestId('row-1-result')).toHaveTextContent(
+				'✗ Search text not found',
+			)
+		})
+	})
+
+	it('clears rowResults when starting a new apply all operation', async () => {
+		render(<ApplyTab onApply={mockOnApply} onPreview={mockOnPreview} />)
+
+		// Establish previewData
+		const previewMessage: ApplyChangeResponse = {
+			command: 'previewChangesResult',
+			success: true,
+			previewData: {
+				rows: [
+					{
+						path: 'src/foo.ts',
+						action: 'modify',
+						description: 'Update foo',
+						changes: { added: 1, removed: 0 },
+					},
+				],
+				errors: [],
+			},
+		}
+		fireEvent(window, new MessageEvent('message', { data: previewMessage }))
+
+		await waitFor(() => {
+			expect(screen.getByTestId('mock-preview-table')).toBeInTheDocument()
+		})
+
+		// Apply all once (with a result)
+		const firstApplyMessage: ApplyChangeResponse = {
+			command: 'applyChangesResult',
+			success: true,
+			results: [
+				{
+					path: 'src/foo.ts',
+					action: 'modify',
+					success: false,
+					message: 'Search text not found',
+				},
+			],
+		}
+		fireEvent(window, new MessageEvent('message', { data: firstApplyMessage }))
+
+		await waitFor(() => {
+			expect(screen.getByTestId('row-0-result')).toBeInTheDocument()
+		})
+
+		// Start a new apply all — rowResults should be cleared immediately
+		const textarea = screen.getByTestId('mock-response-textarea')
+		const applyButton = screen.getByTestId('apply-button')
+		fireEvent.change(textarea, { target: { value: '<file>xml</file>' } })
+		fireEvent.click(applyButton)
+
+		// rowResults should be cleared (no inline result shown while applying)
+		expect(screen.queryByTestId('row-0-result')).toBeNull()
+	})
+
+	it('clears previewData and shows errors in ResultsDisplay when applyChangesResult is parse-level failure', async () => {
+		render(<ApplyTab onApply={mockOnApply} onPreview={mockOnPreview} />)
+
+		// Establish previewData first
+		const previewMessage: ApplyChangeResponse = {
+			command: 'previewChangesResult',
+			success: true,
+			previewData: {
+				rows: [
+					{
+						path: 'src/foo.ts',
+						action: 'modify',
+						description: 'Update foo',
+						changes: { added: 1, removed: 0 },
+					},
+				],
+				errors: [],
+			},
+		}
+		fireEvent(window, new MessageEvent('message', { data: previewMessage }))
+
+		await waitFor(() => {
+			expect(screen.getByTestId('mock-preview-table')).toBeInTheDocument()
+		})
+
+		// Apply all returns a parse-level failure (no results, just errors)
+		const failMessage: ApplyChangeResponse = {
+			command: 'applyChangesResult',
+			success: false,
+			errors: ['XML parsing failed: unexpected token'],
+		}
+		fireEvent(window, new MessageEvent('message', { data: failMessage }))
+
+		await waitFor(() => {
+			// PreviewTable should be hidden, ResultsDisplay with error should be visible
+			expect(screen.queryByTestId('mock-preview-table')).toBeNull()
+			expect(screen.getByTestId('errors')).toHaveTextContent(
+				'XML parsing failed: unexpected token',
+			)
+		})
 	})
 })

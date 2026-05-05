@@ -14,6 +14,13 @@ interface SavedPrompt {
 	createdAt: number
 }
 
+interface SavedPrompt {
+	id: string
+	name: string
+	content: string
+	createdAt: number
+}
+
 interface ContextTabProps {
 	selectedCount: number
 	onCopy: ({

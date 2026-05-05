@@ -125,31 +125,54 @@ function checkMagicNumbers(chunk: Uint8Array): boolean {
 function analyzeByteContent(chunk: Uint8Array): boolean {
 	if (chunk.length === 0) return false
 
-	let nonPrintableCount = 0
-	let nullByteCount = 0
+	// Try to decode as UTF-8 with strict mode.
+	// Valid UTF-8 text files (including Vietnamese, Chinese, Japanese, emoji, etc.)
+	// will decode successfully. Binary files typically contain invalid UTF-8 sequences.
+	//
+	// Trim up to 3 trailing bytes to handle incomplete multi-byte sequences at chunk
+	// boundaries (e.g., an 8KB read that cuts in the middle of a 3-byte sequence).
+	const decoder = new TextDecoder('utf-8', { fatal: true })
+	let isValidUtf8 = false
 
-	for (const byte of chunk) {
-		// Count null bytes
-		if (byte === 0) {
-			nullByteCount++
-		}
-		// Count non-printable characters (excluding common whitespace)
-		else if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
-			nonPrintableCount++
-		}
-		// Very high bytes that are uncommon in text
-		else if (byte > 126) {
-			nonPrintableCount++
+	for (let trim = 0; trim <= 3; trim++) {
+		try {
+			decoder.decode(chunk.subarray(0, chunk.length - trim))
+			isValidUtf8 = true
+			break
+		} catch {
+			// Continue trimming
 		}
 	}
 
-	// If more than 1% null bytes, likely binary
+	if (isValidUtf8) {
+		// Successfully decoded as valid UTF-8 text.
+		// Only flag as binary if null bytes are present (extremely rare in real text).
+		for (const byte of chunk) {
+			if (byte === 0) return true
+		}
+		return false
+	}
+
+	// Not valid UTF-8. Fall back to counting only truly suspicious bytes:
+	// null bytes and C0 control codes (excluding common whitespace like tab/LF/CR).
+	let nullByteCount = 0
+	let controlCount = 0
+
+	for (const byte of chunk) {
+		if (byte === 0) {
+			nullByteCount++
+		} else if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
+			controlCount++
+		}
+	}
+
+	// More than 1% null bytes → binary
 	if (nullByteCount > chunk.length * 0.01) {
 		return true
 	}
 
-	// If more than 30% non-printable characters, likely binary
-	if (nonPrintableCount > chunk.length * 0.3) {
+	// More than 30% control characters (excl. whitespace) → binary
+	if (controlCount > chunk.length * 0.3) {
 		return true
 	}
 
