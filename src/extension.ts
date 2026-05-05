@@ -3,7 +3,7 @@ import { FileExplorerWebviewProvider } from './providers/file-explorer'
 import { telemetry } from './services/telemetry'
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Starting Overwrite extension')
+	console.log('Starting PromptForge extension')
 
 	// Initialize telemetry early
 	try {
@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated
 export async function deactivate() {
-	console.log('Deactivating Overwrite extension')
+	console.log('Deactivating PromptForge extension')
 	try {
 		await telemetry.shutdown()
 	} catch (e) {

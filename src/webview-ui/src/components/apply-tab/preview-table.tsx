@@ -1,12 +1,13 @@
 import type React from 'react'
 import ChangeBar from './change-bar'
-import type { PreviewData } from './types'
+import type { PreviewData, RowResult } from './types'
 
 interface PreviewTableProps {
 	previewData: PreviewData | null
 	onApplyRow: (rowIndex: number) => void
 	onPreviewRow?: (rowIndex: number) => void
 	isApplying?: boolean
+	rowResults?: Record<number, RowResult>
 }
 
 const PreviewTable: React.FC<PreviewTableProps> = ({
@@ -14,6 +15,7 @@ const PreviewTable: React.FC<PreviewTableProps> = ({
 	onApplyRow,
 	onPreviewRow,
 	isApplying = false,
+	rowResults = {},
 }) => {
 	if (!previewData) {
 		return null
@@ -60,91 +62,148 @@ const PreviewTable: React.FC<PreviewTableProps> = ({
 							</vscode-table-row>
 						</vscode-table-header>
 						<vscode-table-body>
-							{rows.map((row, index) => (
-								<vscode-table-row key={index}>
-									<vscode-table-cell
-										className="align-top py-2 px-1"
-										style={{
-											wordBreak: 'break-word',
-											whiteSpace: 'normal',
-										}}
+							{rows.map((row, index) => {
+								const rowResult = rowResults[index]
+								const hasApplyError =
+									rowResult !== undefined && !rowResult.success
+								const hasApplySuccess = rowResult?.success
+
+								return (
+									<vscode-table-row
+										key={index}
+										style={
+											hasApplyError
+												? {
+														outline:
+															'1px solid var(--vscode-inputValidation-errorBorder)',
+														outlineOffset: '-1px',
+													}
+												: hasApplySuccess
+													? {
+															outline:
+																'1px solid var(--vscode-testing-iconPassed)',
+															outlineOffset: '-1px',
+														}
+													: undefined
+										}
 									>
-										<div className="font-mono text-sm break-words">
-											{row.path}
-											{row.action === 'rename' && row.newPath && (
-												<div className="text-muted text-xs mt-1 break-words">
-													→ {row.newPath}
-												</div>
-											)}
-										</div>
-									</vscode-table-cell>
-									<vscode-table-cell
-										className="align-top py-2 px-1"
-										style={{
-											wordBreak: 'break-word',
-											whiteSpace: 'normal',
-										}}
-									>
-										<div className="text-sm break-words">
-											{row.description}
-											{row.hasError && (
-												<div className="text-error text-xs mt-1 break-words">
-													{row.errorMessage}
-												</div>
-											)}
-										</div>
-									</vscode-table-cell>
-									<vscode-table-cell className="align-top py-2 px-1" style={{}}>
-										<div className="flex flex-col gap-1">
-											<div className="text-xs font-mono">
-												{row.changes.added > 0 && (
-													<span className="text-green-600">
-														+{row.changes.added}
-													</span>
+										<vscode-table-cell
+											className="align-top py-2 px-1"
+											style={{
+												wordBreak: 'break-word',
+												whiteSpace: 'normal',
+												backgroundColor: hasApplyError
+													? 'var(--vscode-inputValidation-errorBackground)'
+													: hasApplySuccess
+														? 'color-mix(in srgb, var(--vscode-testing-iconPassed) 8%, transparent)'
+														: undefined,
+											}}
+										>
+											<div className="font-mono text-sm break-words">
+												{row.path}
+												{row.action === 'rename' && row.newPath && (
+													<div className="text-muted text-xs mt-1 break-words">
+														→ {row.newPath}
+													</div>
 												)}
-												{row.changes.added > 0 &&
-													row.changes.removed > 0 &&
-													' '}
-												{row.changes.removed > 0 && (
-													<span className="text-red-600">
-														−{row.changes.removed}
-													</span>
-												)}
-												{row.changes.added === 0 &&
-													row.changes.removed === 0 && (
-														<span className="text-muted">—</span>
-													)}
 											</div>
-											<ChangeBar changes={row.changes} />
-										</div>
-									</vscode-table-cell>
-									<vscode-table-cell
-										className="align-top py-2 px-1 text-center"
-										style={{}}
-									>
-										<div className="flex flex-col items-center justify-center gap-2">
-											<vscode-button
-												onClick={() => onPreviewRow?.(index)}
-												disabled={row.hasError || row.action === 'rename'}
-												aria-label={`Preview ${row.action} for ${row.path}`}
-												title={`Preview ${row.action} for ${row.path}`}
-												className="h-6"
-											>
-												<span className="codicon codicon-play"></span>
-											</vscode-button>
-											<vscode-button
-												onClick={() => onApplyRow(index)}
-												disabled={row.hasError || isApplying}
-												aria-label={`Apply ${row.action} to ${row.path}`}
-												title={`Apply ${row.action} to ${row.path}`}
-												className="h-6"
-											>
-												<span className="codicon codicon-edit"></span>
-											</vscode-button>
-										</div>
-									</vscode-table-cell>
-								</vscode-table-row>
-							))}
+										</vscode-table-cell>
+										<vscode-table-cell
+											className="align-top py-2 px-1"
+											style={{
+												wordBreak: 'break-word',
+												whiteSpace: 'normal',
+												backgroundColor: hasApplyError
+													? 'var(--vscode-inputValidation-errorBackground)'
+													: hasApplySuccess
+														? 'color-mix(in srgb, var(--vscode-testing-iconPassed) 8%, transparent)'
+														: undefined,
+											}}
+										>
+											<div className="text-sm break-words">
+												{row.description}
+												{row.hasError && (
+													<div className="text-error text-xs mt-1 break-words">
+														{row.errorMessage}
+													</div>
+												)}
+												{hasApplyError && (
+													<div
+														className="text-xs mt-1 break-words font-medium"
+														style={{
+															color: 'var(--vscode-testing-iconFailed)',
+														}}
+													>
+														⚠ Apply failed: {rowResult.message}
+													</div>
+												)}
+												{hasApplySuccess && (
+													<div
+														className="text-xs mt-1 break-words"
+														style={{
+															color: 'var(--vscode-testing-iconPassed)',
+														}}
+													>
+														✓ {rowResult.message}
+													</div>
+												)}
+											</div>
+										</vscode-table-cell>
+										<vscode-table-cell
+											className="align-top py-2 px-1"
+											style={{}}
+										>
+											<div className="flex flex-col gap-1">
+												<div className="text-xs font-mono">
+													{row.changes.added > 0 && (
+														<span className="text-green-600">
+															+{row.changes.added}
+														</span>
+													)}
+													{row.changes.added > 0 &&
+														row.changes.removed > 0 &&
+														' '}
+													{row.changes.removed > 0 && (
+														<span className="text-red-600">
+															−{row.changes.removed}
+														</span>
+													)}
+													{row.changes.added === 0 &&
+														row.changes.removed === 0 && (
+															<span className="text-muted">—</span>
+														)}
+												</div>
+												<ChangeBar changes={row.changes} />
+											</div>
+										</vscode-table-cell>
+										<vscode-table-cell
+											className="align-top py-2 px-1 text-center"
+											style={{}}
+										>
+											<div className="flex flex-col items-center justify-center gap-2">
+												<vscode-button
+													onClick={() => onPreviewRow?.(index)}
+													disabled={row.hasError || row.action === 'rename'}
+													aria-label={`Preview ${row.action} for ${row.path}`}
+													title={`Preview ${row.action} for ${row.path}`}
+													className="h-6"
+												>
+													<span className="codicon codicon-play"></span>
+												</vscode-button>
+												<vscode-button
+													onClick={() => onApplyRow(index)}
+													disabled={row.hasError || isApplying}
+													aria-label={`Apply ${row.action} to ${row.path}`}
+													title={`Apply ${row.action} to ${row.path}`}
+													className="h-6"
+												>
+													<span className="codicon codicon-edit"></span>
+												</vscode-button>
+											</div>
+										</vscode-table-cell>
+									</vscode-table-row>
+								)
+							})}
 						</vscode-table-body>
 					</vscode-table>
 				</div>

@@ -1,31 +1,55 @@
 // Message payload types used between the webview and the provider
 
 export interface OpenFilePayload {
-	fileUri: string // Changed from filePath to fileUri (string representation of vscode.Uri)
+	fileUri: string
 }
 
 export interface CopyContextPayload {
-	selectedUris: string[] // Changed from selectedPaths to selectedUris (array of URI strings)
+	selectedUris: string[]
 	userInstructions: string
+	mode?: 'plan' | 'code'
 }
 
-// Payload for getTokenCounts, though it's used inline in the provider,
-// defining it here for clarity or future use if refactored.
 export interface GetTokenCountsPayload {
-	selectedUris: string[] // Array of URI strings
+	selectedUris: string[]
 }
 
 export interface GetFileTreePayload {
-	excludedFolders?: string // String containing excluded folder patterns, one per line
-	readGitignore?: boolean // Whether to respect .gitignore when building the tree
+	excludedFolders?: string
+	excludedExtensions?: string
+	readGitignore?: boolean
 }
 
 export interface SaveSettingsPayload {
 	excludedFolders: string
+	excludedExtensions: string
 	readGitignore: boolean
+	customPromptProject: string
+	customPromptGlobal: string
+	customPromptScope: 'project' | 'global'
 }
 
 export interface UpdateSettingsPayload {
 	excludedFolders: string
+	excludedExtensions: string
 	readGitignore: boolean
+	customPromptProject: string
+	customPromptGlobal: string
+	customPromptScope: 'project' | 'global'
+}
+
+export interface SavedPrompt {
+	id: string
+	name: string
+	content: string
+	createdAt: number
+}
+
+export interface SavePromptPayload {
+	name: string
+	content: string
+}
+
+export interface DeletePromptPayload {
+	id: string
 }

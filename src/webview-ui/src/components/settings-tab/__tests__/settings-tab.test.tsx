@@ -18,7 +18,11 @@ describe('SettingsTab', () => {
 		const utils = render(
 			<SettingsTab
 				excludedFolders={initial}
+				excludedExtensions=""
 				readGitignore={readGit}
+				customPromptProject=""
+				customPromptGlobal=""
+				customPromptScope="global"
 				onSaveSettings={onSave}
 			/>,
 		)
@@ -51,7 +55,11 @@ describe('SettingsTab', () => {
 		expect(onSave).toHaveBeenCalledTimes(1)
 		expect(onSave).toHaveBeenCalledWith({
 			excludedFolders: 'node_modules\n.vscode',
+			excludedExtensions: '',
 			readGitignore: true,
+			customPromptProject: '',
+			customPromptGlobal: '',
+			customPromptScope: 'global',
 		})
 
 		// Button disabled and toast visible
@@ -70,7 +78,11 @@ describe('SettingsTab', () => {
 		const { rerender } = render(
 			<SettingsTab
 				excludedFolders={'a'}
+				excludedExtensions=""
 				readGitignore={true}
+				customPromptProject=""
+				customPromptGlobal=""
+				customPromptScope="global"
 				onSaveSettings={onSave}
 			/>,
 		)
@@ -83,7 +95,11 @@ describe('SettingsTab', () => {
 		rerender(
 			<SettingsTab
 				excludedFolders={'NEW'}
+				excludedExtensions=""
 				readGitignore={true}
+				customPromptProject=""
+				customPromptGlobal=""
+				customPromptScope="global"
 				onSaveSettings={onSave}
 			/>,
 		)

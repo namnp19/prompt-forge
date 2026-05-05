@@ -30,9 +30,16 @@ export interface PreviewData {
 	errors: string[]
 }
 
+export interface RowResult {
+	success: boolean
+	message: string
+	errors?: string[]
+}
+
 export interface ApplyChangeResponse {
 	command: string
 	success: boolean
+	rowIndex?: number
 	results?: ApplyResult[]
 	errors?: string[]
 	previewData?: PreviewData

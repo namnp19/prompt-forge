@@ -180,6 +180,8 @@ export function generatePrompt(
 	fileContents: string,
 	userInstructions: string,
 	includeXmlFormatting: boolean,
+	mode?: 'plan' | 'code',
+	customPrompt?: string,
 ): string {
 	let prompt = `<file_map>
 ${fileMap}
@@ -193,8 +195,22 @@ ${fileContents}
 		prompt += `\n${XML_FORMATTING_INSTRUCTIONS}`
 	}
 
+	if (customPrompt && customPrompt.trim() !== '') {
+		prompt += `\n<custom_instructions>\n${customPrompt.trim()}\n</custom_instructions>\n`
+	}
+
 	if (userInstructions && userInstructions.trim() !== '') {
 		prompt += `\n<user_instructions>\n${userInstructions.trim()}\n</user_instructions>\n`
+	}
+
+	if (mode === 'plan') {
+		prompt += `\n<mode_instructions>
+PLAN MODE: Do NOT write any code yet.
+1. Carefully analyze the request and codebase context above.
+2. Ask clarifying questions if anything is unclear or ambiguous.
+3. Provide a detailed step-by-step implementation plan.
+4. Wait for explicit approval before writing any code.
+</mode_instructions>\n`
 	}
 
 	return prompt

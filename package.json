@@ -1,51 +1,51 @@
 {
-  "name": "overwrite",
-  "displayName": "Overwrite",
+  "name": "promptforge",
+  "displayName": "Prompt Forge",
   "packageManager": "pnpm@10.8.0",
-  "publisher": "mnismt",
+  "publisher": "namnp19",
   "license": "MIT",
-  "description": "Pack your entire repo in a single prompt",
+  "description": "Pack context and prompts, bulk-apply code patches effortlessly",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mnismt/overwrite.git"
+    "url": "https://github.com/namnp19/prompt-forge.git"
   },
   "version": "0.1.3",
-  "icon": "resources/overwrite-logo.png",
+  "icon": "resources/ext-logo.png",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:overwriteFilesWebview"
+    "activationEvents": [
+    "onView:promptforgeFilesWebview"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "overwrite",
-          "title": "Overwrite",
-          "icon": "resources/overwrite-logo.png"
+          "id": "promptforge",
+          "title": "Prompt Forge",
+          "icon": "resources/ext-logo.png"
         }
       ]
     },
     "views": {
-      "overwrite": [
+      "promptforge": [
         {
-          "id": "overwriteFilesWebview",
-          "name": "Overwrite",
+          "id": "promptforgeFilesWebview",
+          "name": "Prompt Forge",
           "type": "webview",
-          "contextualTitle": "Overwrite Files"
+          "contextualTitle": "Prompt Forge Files"
         }
       ]
     },
     "commands": [],
     "configuration": {
-      "title": "Overwrite",
+      "title": "Prompt Forge",
       "properties": {
-        "overwrite.telemetry.enabled": {
+        "promptforge.telemetry.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable anonymous usage telemetry to help improve the extension. All data is anonymized and no file contents or paths are ever collected."

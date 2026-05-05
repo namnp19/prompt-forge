@@ -47,7 +47,7 @@ class TelemetryService {
 		context.subscriptions.push(
 			vscode.workspace.onDidChangeConfiguration((e) => {
 				if (
-					e.affectsConfiguration('overwrite.telemetry.enabled') ||
+					e.affectsConfiguration('promptforge.telemetry.enabled') ||
 					e.affectsConfiguration('telemetry.telemetryLevel')
 				) {
 					this.handleConfigurationChange()
@@ -96,10 +96,10 @@ class TelemetryService {
 
 		// Check extension-specific setting
 		const extensionTelemetryEnabled = vscode.workspace
-			.getConfiguration('overwrite.telemetry')
+			.getConfiguration('promptforge.telemetry')
 			.get<boolean>('enabled', true) // default to true
 
-		console.log(`Overwrite telemetry enabled: ${extensionTelemetryEnabled}`)
+		console.log(`PromptForge telemetry enabled: ${extensionTelemetryEnabled}`)
 
 		return extensionTelemetryEnabled
 	}
@@ -164,7 +164,7 @@ class TelemetryService {
 		}
 
 		const excludedFolders = this.context.workspaceState.get<string>(
-			'overwrite.excludedFolders',
+			'promptforge.excludedFolders',
 			'',
 		)
 		const excludedCount = excludedFolders

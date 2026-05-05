@@ -17,7 +17,11 @@ export interface VsCodeApi {
 import type { VscodeTreeItem } from '../types'
 
 type ExcludedFoldersPayload = { excludedFolders: string }
-type SaveSettingsPayload = { excludedFolders: string; readGitignore: boolean }
+type SaveSettingsPayload = {
+	excludedFolders: string
+	excludedExtensions: string
+	readGitignore: boolean
+}
 type TokenCountsPayload = { selectedUris: string[] }
 type TokenCountPayload = { text: string; requestId: string }
 type OpenFilePayload = { fileUri: string }
@@ -356,6 +360,7 @@ function estimateTokensFromText(text: string): number {
 export function createMockVsCodeApi(): VsCodeApi {
 	let state: unknown = {}
 	let excludedFolders = ''
+	let excludedExtensions = ''
 	let readGitignore = true
 	let fileTree: VscodeTreeItem[] = buildMockFileTree()
 
@@ -390,7 +395,7 @@ export function createMockVsCodeApi(): VsCodeApi {
 					case 'getSettings': {
 						sendToWebview({
 							command: 'updateSettings',
-							payload: { excludedFolders, readGitignore },
+							payload: { excludedFolders, excludedExtensions, readGitignore },
 						})
 						break
 					}
@@ -399,6 +404,9 @@ export function createMockVsCodeApi(): VsCodeApi {
 						if (isObject(p)) {
 							if (typeof p.excludedFolders === 'string') {
 								excludedFolders = p.excludedFolders
+							}
+							if (typeof p.excludedExtensions === 'string') {
+								excludedExtensions = p.excludedExtensions
 							}
 							if (typeof p.readGitignore === 'boolean') {
 								readGitignore = p.readGitignore
@@ -414,7 +422,7 @@ export function createMockVsCodeApi(): VsCodeApi {
 						// Also send combined settings for newer clients
 						sendToWebview({
 							command: 'updateSettings',
-							payload: { excludedFolders, readGitignore },
+							payload: { excludedFolders, excludedExtensions, readGitignore },
 						})
 						break
 					}
@@ -492,7 +500,7 @@ export function createMockVsCodeApi(): VsCodeApi {
 	}
 
 	// Expose test hooks for Playwright
-	window.__overwriteMockApi__ = {
+	window.__promptforgeMockApi__ = {
 		setFileTree: (tree: VscodeTreeItem[]) => {
 			fileTree = Array.isArray(tree) ? tree : fileTree
 		},

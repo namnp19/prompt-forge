@@ -79,7 +79,7 @@ function getDevHtmlWithServer(
     </script>
     <script type="module" src="${DEV_WEBVIEW_URL}/@vite/client"></script>
     <link rel="icon" type="image/svg+xml" href="${DEV_WEBVIEW_URL}/vite.svg" />
-    <title>Overwrite (Dev)</title>
+    <title>PromptForge (Dev)</title>
   </head>
   <body>
     <div id="root"></div>
@@ -151,7 +151,7 @@ function getProdHtml(
   <link href="${codiconUri}" rel="stylesheet" id="vscode-codicon-stylesheet" />
   <meta http-equiv="Content-Security-Policy" content="${csp}">
   <link rel="stylesheet" type="text/css" href="${styleUri}">
-  <title>Overwrite</title>
+  <title>PromptForge</title>
 </head>
 <body>
   <div id="root"></div>

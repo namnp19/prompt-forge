@@ -22,7 +22,7 @@ interface VsCodeApi {
 declare global {
 	interface Window {
 		vscodeApi?: VsCodeApi
-		__overwriteMockApi__?: {
+		__promptforgeMockApi__?: {
 			setFileTree: (tree: VscodeTreeItem[]) => void
 			setExcludedFolders: (text: string) => void
 			sendToWebview: (message: VsCodeMessage) => void
