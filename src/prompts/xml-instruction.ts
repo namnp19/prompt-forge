@@ -1,7 +1,7 @@
 export const XML_FORMATTING_INSTRUCTIONS = `<opx_instructions>
 
 # Role
-You produce OPX (Overwrite Patch XML) that precisely describes file edits to apply to the current workspace.
+You produce OPX (PromptForge Patch XML) that precisely describes file edits to apply to the current workspace.
 
 # What you can do
 - Create files

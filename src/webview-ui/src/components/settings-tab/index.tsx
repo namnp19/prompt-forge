@@ -1,42 +1,85 @@
 import { useEffect, useRef, useState } from 'react'
+import CustomPrompt from './custom-prompt'
+import ExcludedExtensions from './excluded-extensions'
 import ExcludedFolders from './excluded-folders'
 import RespectGitignoreToggle from './respect-gitignore-toggle'
 
 interface SettingsTabProps {
 	excludedFolders: string
+	excludedExtensions: string
 	readGitignore: boolean
+	customPromptProject: string
+	customPromptGlobal: string
+	customPromptScope: 'project' | 'global'
 	onSaveSettings: (payload: {
 		excludedFolders: string
+		excludedExtensions: string
 		readGitignore: boolean
+		customPromptProject: string
+		customPromptGlobal: string
+		customPromptScope: 'project' | 'global'
 	}) => void
 }
 
 const SettingsTab: React.FC<SettingsTabProps> = ({
 	excludedFolders,
+	excludedExtensions,
 	readGitignore,
+	customPromptProject,
+	customPromptGlobal,
+	customPromptScope,
 	onSaveSettings,
 }) => {
 	// Generic form draft state – scalable for future settings
 	const [draft, setDraft] = useState<{
 		excludedFolders: string
+		excludedExtensions: string
 		readGitignore: boolean
-	}>(() => ({ excludedFolders, readGitignore }))
+		customPromptProject: string
+		customPromptGlobal: string
+		customPromptScope: 'project' | 'global'
+	}>(() => ({
+		excludedFolders,
+		excludedExtensions,
+		readGitignore,
+		customPromptProject,
+		customPromptGlobal,
+		customPromptScope,
+	}))
 	const [isDirty, setIsDirty] = useState(false)
 	const [showSaved, setShowSaved] = useState(false)
 	const savedTimerRef = useRef<number | null>(null)
 
 	// Sync incoming prop to draft and reset dirty when saved externally
 	useEffect(() => {
-		setDraft({ excludedFolders, readGitignore })
+		setDraft({
+			excludedFolders,
+			excludedExtensions,
+			readGitignore,
+			customPromptProject,
+			customPromptGlobal,
+			customPromptScope,
+		})
 		setIsDirty(false)
-	}, [excludedFolders, readGitignore])
+	}, [
+		excludedFolders,
+		excludedExtensions,
+		readGitignore,
+		customPromptProject,
+		customPromptGlobal,
+		customPromptScope,
+	])
 
 	const handleChange = (field: keyof typeof draft, value: string | boolean) => {
 		setDraft((prev) => {
 			const next = { ...prev, [field]: value } as typeof prev
 			setIsDirty(
 				next.excludedFolders !== excludedFolders ||
-					next.readGitignore !== readGitignore,
+					next.excludedExtensions !== excludedExtensions ||
+					next.readGitignore !== readGitignore ||
+					next.customPromptProject !== customPromptProject ||
+					next.customPromptGlobal !== customPromptGlobal ||
+					next.customPromptScope !== customPromptScope,
 			)
 			return next
 		})
@@ -46,7 +89,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 		e.preventDefault()
 		onSaveSettings({
 			excludedFolders: draft.excludedFolders,
+			excludedExtensions: draft.excludedExtensions,
 			readGitignore: draft.readGitignore,
+			customPromptProject: draft.customPromptProject,
+			customPromptGlobal: draft.customPromptGlobal,
+			customPromptScope: draft.customPromptScope,
 		})
 		setIsDirty(false)
 		// show a brief toast/label
@@ -57,8 +104,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 			savedTimerRef.current = null
 		}, 1500)
 	}
-
-	// No explicit onClick fallback to avoid double-submit; rely on form submit
 
 	return (
 		<div className="py-2">
@@ -74,10 +119,27 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 					onDraftChange={(v) => handleChange('excludedFolders', v)}
 				/>
 
+				<ExcludedExtensions
+					excludedExtensions={draft.excludedExtensions}
+					onChangeExcludedExtensions={(v) =>
+						handleChange('excludedExtensions', v)
+					}
+					onDraftChange={(v) => handleChange('excludedExtensions', v)}
+				/>
+
 				<RespectGitignoreToggle
 					checked={draft.readGitignore}
 					onChange={(v) => handleChange('readGitignore', v)}
 					onDraftChange={(v) => handleChange('readGitignore', v)}
+				/>
+
+				<CustomPrompt
+					customPromptProject={draft.customPromptProject}
+					customPromptGlobal={draft.customPromptGlobal}
+					customPromptScope={draft.customPromptScope}
+					onChangeProject={(v) => handleChange('customPromptProject', v)}
+					onChangeGlobal={(v) => handleChange('customPromptGlobal', v)}
+					onChangeScope={(v) => handleChange('customPromptScope', v)}
 				/>
 
 				{/* Sticky footer with bottom-left Save button */}
@@ -86,8 +148,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 						type="submit"
 						disabled={!isDirty}
 						onClick={(e) => {
-							// In some test/jsdom environments, custom elements don't submit forms by default.
-							// Ensure we requestSubmit on the nearest form for reliability.
 							const form = (e.currentTarget as unknown as HTMLElement).closest(
 								'form',
 							) as HTMLFormElement | null

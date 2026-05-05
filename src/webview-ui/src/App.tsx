@@ -18,7 +18,18 @@ interface UpdateExcludedFoldersPayload {
 
 interface UpdateSettingsPayload {
 	excludedFolders: string
+	excludedExtensions: string
 	readGitignore: boolean
+	customPromptProject: string
+	customPromptGlobal: string
+	customPromptScope: 'project' | 'global'
+}
+
+export interface SavedPrompt {
+	id: string
+	name: string
+	content: string
+	createdAt: number
 }
 
 function App() {
@@ -29,7 +40,14 @@ function App() {
 	const [isLoading, setIsLoading] = useState<boolean>(true) // For loading indicator
 	const [, setErrorText] = useState<string | null>(null) // Graceful error banner
 	const [excludedFolders, setExcludedFolders] = useState<string>('') // Persisted excluded folders
+	const [excludedExtensions, setExcludedExtensions] = useState<string>('') // Persisted excluded extensions
 	const [readGitignore, setReadGitignore] = useState<boolean>(true)
+	const [customPromptProject, setCustomPromptProject] = useState<string>('')
+	const [customPromptGlobal, setCustomPromptGlobal] = useState<string>('')
+	const [customPromptScope, setCustomPromptScope] = useState<
+		'project' | 'global'
+	>('global')
+	const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([])
 
 	// Send message to extension using the utility
 	const sendMessage = useCallback((command: string, payload?: unknown) => {
@@ -107,10 +125,11 @@ function App() {
 		}
 	}, [])
 
-	// Fetch initial file tree and settings
+	// Fetch initial file tree, settings and prompts
 	useEffect(() => {
 		sendMessage('getFileTree')
 		sendMessage('getSettings')
+		sendMessage('getPrompts')
 	}, [sendMessage])
 
 	// Listen for messages from extension
@@ -158,9 +177,25 @@ function App() {
 					if (p) {
 						if (typeof p.excludedFolders === 'string')
 							setExcludedFolders(p.excludedFolders)
+						if (typeof p.excludedExtensions === 'string')
+							setExcludedExtensions(p.excludedExtensions)
 						if (typeof p.readGitignore === 'boolean')
 							setReadGitignore(p.readGitignore)
+						if (typeof p.customPromptProject === 'string')
+							setCustomPromptProject(p.customPromptProject)
+						if (typeof p.customPromptGlobal === 'string')
+							setCustomPromptGlobal(p.customPromptGlobal)
+						if (
+							p.customPromptScope === 'project' ||
+							p.customPromptScope === 'global'
+						)
+							setCustomPromptScope(p.customPromptScope)
 					}
+					break
+				}
+				case 'updatePrompts': {
+					const p = message.payload as { prompts: SavedPrompt[] }
+					if (p?.prompts) setSavedPrompts(p.prompts)
 					break
 				}
 				case 'tokenCountResponse':
@@ -211,11 +246,22 @@ function App() {
 		[sendMessage, readGitignore],
 	)
 
-	// Save settings handler (excluded folders + readGitignore)
+	// Save settings handler (excluded folders + excludedExtensions + readGitignore + custom prompt)
 	const handleSaveSettings = useCallback(
-		(payload: { excludedFolders: string; readGitignore: boolean }) => {
+		(payload: {
+			excludedFolders: string
+			excludedExtensions: string
+			readGitignore: boolean
+			customPromptProject: string
+			customPromptGlobal: string
+			customPromptScope: 'project' | 'global'
+		}) => {
 			setExcludedFolders(payload.excludedFolders)
+			setExcludedExtensions(payload.excludedExtensions)
 			setReadGitignore(payload.readGitignore)
+			setCustomPromptProject(payload.customPromptProject)
+			setCustomPromptGlobal(payload.customPromptGlobal)
+			setCustomPromptScope(payload.customPromptScope)
 			sendMessage('saveSettings', payload)
 			// immediately refresh file tree using the saved settings
 			sendMessage('getFileTree', payload)
@@ -234,21 +280,39 @@ function App() {
 		({
 			includeXml,
 			userInstructions,
-		}: { includeXml: boolean; userInstructions: string }) => {
+			mode,
+		}: {
+			includeXml: boolean
+			userInstructions: string
+			mode?: 'plan' | 'code'
+		}) => {
 			if (selectedUris.size === 0) {
-				// Use selectedUris
-				// Display warning in the UI since we can't show VS Code notifications from webview
 				console.warn('No files selected. Please select files before copying.')
 				return
 			}
 
-			// Send message to extension with payload
 			sendMessage(includeXml ? 'copyContextXml' : 'copyContext', {
-				selectedUris: Array.from(selectedUris), // Use selectedUris and correct payload key
+				selectedUris: Array.from(selectedUris),
 				userInstructions,
+				mode,
 			})
 		},
-		[selectedUris, sendMessage], // Depend on selectedUris
+		[selectedUris, sendMessage],
+	)
+
+	// Saved prompts handlers
+	const handleSavePrompt = useCallback(
+		(name: string, content: string) => {
+			sendMessage('savePrompt', { name, content })
+		},
+		[sendMessage],
+	)
+
+	const handleDeletePrompt = useCallback(
+		(id: string) => {
+			sendMessage('deletePrompt', { id })
+		},
+		[sendMessage],
 	)
 
 	// Apply Tab: Handle applying changes
@@ -295,15 +359,16 @@ function App() {
 				</vscode-tab-header>
 				<vscode-tab-panel id="context-tab-panel">
 					<ContextTab
-						// Props for original Context functionality
-						selectedCount={selectedUris.size} // Use selectedUris
+						selectedCount={selectedUris.size}
 						onCopy={handleCopy}
-						// Props for Explorer functionality
 						fileTreeData={fileTreeData}
-						selectedUris={selectedUris} // Pass selectedUris
-						onSelect={handleSelect} // Pass the handler
+						selectedUris={selectedUris}
+						onSelect={handleSelect}
 						onRefresh={handleRefresh}
 						isLoading={isLoading}
+						savedPrompts={savedPrompts}
+						onSavePrompt={handleSavePrompt}
+						onDeletePrompt={handleDeletePrompt}
 					/>
 				</vscode-tab-panel>
 
@@ -327,7 +392,11 @@ function App() {
 				<vscode-tab-panel id="settings-tab-panel">
 					<SettingsTab
 						excludedFolders={excludedFolders}
+						excludedExtensions={excludedExtensions}
 						readGitignore={readGitignore}
+						customPromptProject={customPromptProject}
+						customPromptGlobal={customPromptGlobal}
+						customPromptScope={customPromptScope}
 						onSaveSettings={handleSaveSettings}
 					/>
 				</vscode-tab-panel>

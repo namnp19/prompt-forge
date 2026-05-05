@@ -7,6 +7,13 @@ import TokenStats from './token-stats'
 import UserInstructions from './user-instructions'
 import { countTokens } from './utils'
 
+interface SavedPrompt {
+	id: string
+	name: string
+	content: string
+	createdAt: number
+}
+
 interface ContextTabProps {
 	selectedCount: number
 	onCopy: ({
@@ -21,6 +28,9 @@ interface ContextTabProps {
 	onSelect: (uris: Set<string>) => void
 	onRefresh: (excludedFolders?: string) => void
 	isLoading: boolean
+	savedPrompts?: SavedPrompt[]
+	onSavePrompt?: (name: string, content: string) => void
+	onDeletePrompt?: (id: string) => void
 }
 
 const ContextTab: React.FC<ContextTabProps> = ({
@@ -31,8 +41,12 @@ const ContextTab: React.FC<ContextTabProps> = ({
 	onSelect,
 	onRefresh,
 	isLoading,
+	savedPrompts = [],
+	onSavePrompt,
+	onDeletePrompt,
 }) => {
 	const [userInstructions, setUserInstructions] = useState('')
+	const [mode, setMode] = useState<'plan' | 'code'>('code')
 	const [searchQuery, setSearchQuery] = useState('')
 	const [tokenStats, setTokenStats] = useState({
 		fileTokensEstimate: 0,
@@ -164,7 +178,40 @@ const ContextTab: React.FC<ContextTabProps> = ({
 				<UserInstructions
 					userInstructions={userInstructions}
 					onUserInstructionsChange={setUserInstructions}
+					savedPrompts={savedPrompts}
+					onSavePrompt={onSavePrompt}
+					onDeletePrompt={onDeletePrompt}
 				/>
+				{/* Mode toggle — dưới User Instructions */}
+				<div className="flex items-center gap-2 mt-1 mb-1">
+					<span className="text-xs text-muted">Mode:</span>
+					<div className="flex rounded overflow-hidden border border-button/30">
+						<button
+							type="button"
+							className={`text-xs px-2 py-0.5 border-none cursor-pointer transition-colors ${
+								mode === 'code'
+									? 'bg-button text-button-foreground'
+									: 'bg-transparent text-muted hover:text-fg'
+							}`}
+							onClick={() => setMode('code')}
+							title="Code mode: AI will write code directly"
+						>
+							Code
+						</button>
+						<button
+							type="button"
+							className={`text-xs px-2 py-0.5 border-none cursor-pointer transition-colors ${
+								mode === 'plan'
+									? 'bg-button text-button-foreground'
+									: 'bg-transparent text-muted hover:text-fg'
+							}`}
+							onClick={() => setMode('plan')}
+							title="Plan mode: AI will plan first, ask questions, then wait for approval"
+						>
+							Plan
+						</button>
+					</div>
+				</div>
 
 				{/* Explorer Top Bar */}
 				<div className="mt-2 mb-2 flex items-center">
@@ -253,6 +300,7 @@ const ContextTab: React.FC<ContextTabProps> = ({
 							onCopy({ includeXml: inc, userInstructions })
 						}
 						userInstructions={userInstructions}
+						mode={'plan'}
 					/>
 				</div>
 			</div>

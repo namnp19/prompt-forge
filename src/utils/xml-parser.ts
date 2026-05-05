@@ -22,7 +22,7 @@ interface ParseResult {
 }
 
 /**
- * Parses OPX (Overwrite Patch XML) responses and returns unified FileAction[]
+ * Parses OPX (PromptForge Patch XML) responses and returns unified FileAction[]
  * OPX-only: accepts <edit ...> (optionally wrapped in <opx>...</opx>)
  *
  * op mapping:
@@ -206,26 +206,40 @@ function extractBetweenMarkers(
 	end: string,
 ): string | undefined {
 	// Auto-heal common markdown/chat truncation of marker lines inside literal blocks.
-	// If a line contains only "<" or "<<", treat it as the opening marker "<<<".
-	// If a line contains only ">" or ">>", treat it as the closing marker ">>>".
+	// Strategy: first find the opening marker (possibly truncated as "<" or "<<"),
+	// then only apply closing-marker repair WITHIN the content after the opening marker.
+	// This avoids turning JSX/HTML closing tags (bare ">") into ">>>" outside the block.
 	let s = text.trim()
-	// Repair before searching for markers; operate on full-line matches only.
-	s = s
-		.replace(/^[ \t]*<\s*$/gm, '<<<')
-		.replace(/^[ \t]*<<\s*$/gm, '<<<')
+
+	// Step 1: Repair opening marker only (safe globally — "<" and "<<" are rarely
+	// valid standalone lines in code, unlike ">").
+	s = s.replace(/^[ \t]*<\s*$/gm, '<<<').replace(/^[ \t]*<<\s*$/gm, '<<<')
+
+	// Step 2: Find the opening marker position.
+	const first = s.indexOf(start)
+	if (first === -1) return undefined
+
+	// Step 3: Only repair closing markers AFTER the opening marker position.
+	// Split into before/after and only mutate the "after" portion.
+	const before = s.slice(0, first + start.length)
+	const after = s
+		.slice(first + start.length)
 		.replace(/^[ \t]*>\s*$/gm, '>>>')
 		.replace(/^[ \t]*>>\s*$/gm, '>>>')
 
-	const first = s.indexOf(start)
-	if (first === -1) return undefined
-	const last = s.lastIndexOf(end)
+	const repaired = before + after
+
+	// Step 4: Find the last closing marker.
+	const last = repaired.lastIndexOf(end)
 	if (last === -1 || last <= first) return undefined
+
 	let startIdx = first + start.length
-	while (startIdx < s.length && /[ \t\r\n]/.test(s[startIdx]!)) startIdx++
+	while (startIdx < repaired.length && /[ \t\r\n]/.test(repaired[startIdx]!))
+		startIdx++
 	let endIdx = last - 1
-	while (endIdx >= 0 && /[ \t\r\n]/.test(s[endIdx]!)) endIdx--
+	while (endIdx >= 0 && /[ \t\r\n]/.test(repaired[endIdx]!)) endIdx--
 	if (endIdx < startIdx) return ''
-	return s.slice(startIdx, endIdx + 1)
+	return repaired.slice(startIdx, endIdx + 1)
 }
 
 /**

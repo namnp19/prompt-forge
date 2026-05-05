@@ -249,6 +249,7 @@ async function readDirectoryRecursiveForRoot(
 	excludedDirs: string[],
 	ign: ignore.Ignore,
 	userIgnore: ignore.Ignore,
+	extIgnore: ignore.Ignore,
 ): Promise<VscodeTreeItem[]> {
 	const items: VscodeTreeItem[] = []
 
@@ -287,6 +288,14 @@ async function readDirectoryRecursiveForRoot(
 				continue
 			}
 
+			// Check extension-based exclusions (only for files)
+			if (
+				type === vscode.FileType.File &&
+				extIgnore.ignores(relativePathForIgnore)
+			) {
+				continue
+			}
+
 			const item: VscodeTreeItem = {
 				label: name,
 				value: entryUri.toString(), // Use full URI string as the value
@@ -301,6 +310,7 @@ async function readDirectoryRecursiveForRoot(
 					excludedDirs,
 					ign,
 					userIgnore,
+					extIgnore,
 				)
 				if (subItems.length > 0) {
 					item.subItems = subItems
@@ -331,7 +341,7 @@ async function readDirectoryRecursiveForRoot(
  */
 export async function getWorkspaceFileTree(
 	excludedDirs: string[],
-	options?: { useGitignore?: boolean },
+	options?: { useGitignore?: boolean; excludedExtensions?: string[] },
 ): Promise<VscodeTreeItem[]> {
 	const workspaceFolders = vscode.workspace.workspaceFolders
 	if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -428,12 +438,30 @@ export async function getWorkspaceFileTree(
 		// Create ignore object for user-defined excluded patterns
 		const userIgnore = ignore().add(excludedDirs)
 
+		// Create ignore object for file extension patterns (e.g., *.css, *.txt)
+		const extPatterns = options?.excludedExtensions ?? []
+		const extIgnore = ignore().add(
+			extPatterns
+				.map((p) => {
+					// Normalize: if user typed "*.css" or ".css" or "css", convert to glob pattern
+					const trimmed = p.trim()
+					if (!trimmed) return ''
+					if (trimmed.startsWith('*.')) return trimmed // already *.ext
+					if (trimmed.startsWith('.')) return `*${trimmed}` // .css -> *.css
+					if (!trimmed.includes('*') && !trimmed.includes('/'))
+						return `*.${trimmed}` // css -> *.css
+					return trimmed
+				})
+				.filter(Boolean),
+		)
+
 		const subItems = await readDirectoryRecursiveForRoot(
 			rootUri,
 			rootUri, // rootUri itself is the base for relative ignore paths
 			excludedDirs,
 			ign,
 			userIgnore,
+			extIgnore,
 		)
 
 		const rootItem: VscodeTreeItem = {

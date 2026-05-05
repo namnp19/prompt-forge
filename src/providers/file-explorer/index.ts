@@ -16,15 +16,18 @@ import { applyFileActions } from './file-action-handler'
 import { getHtmlForWebview } from './html-generator'
 import type {
 	CopyContextPayload,
+	DeletePromptPayload,
 	GetFileTreePayload,
 	GetTokenCountsPayload,
 	OpenFilePayload,
+	SavePromptPayload,
 	SaveSettingsPayload,
+	SavedPrompt,
 	UpdateSettingsPayload,
 } from './types'
 
 export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = 'overwriteFilesWebview'
+	public static readonly viewType = 'promptforgeFilesWebview'
 
 	private _view?: vscode.WebviewView
 	private _context: vscode.ExtensionContext
@@ -33,8 +36,34 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 	private _treeBuildTimeout: NodeJS.Timeout | null = null // Timeout for tree building
 	// Always-excluded patterns that never show in the UI; keep minimal (.git only)
 	private readonly _excludedDirs = ['.git', '.hg', '.svn']
-	private static readonly EXCLUDED_FOLDERS_KEY = 'overwrite.excludedFolders'
-	private static readonly READ_GITIGNORE_KEY = 'overwrite.readGitignore'
+	private static readonly EXCLUDED_FOLDERS_KEY = 'promptforge.excludedFolders'
+	private static readonly EXCLUDED_EXTENSIONS_KEY =
+		'promptforge.excludedExtensions'
+	private static readonly READ_GITIGNORE_KEY = 'promptforge.readGitignore'
+	private static readonly SAVED_PROMPTS_KEY = 'promptforge.savedPrompts'
+	private static readonly CUSTOM_PROMPT_PROJECT_KEY =
+		'promptforge.customPromptProject'
+	private static readonly CUSTOM_PROMPT_SCOPE_KEY =
+		'promptforge.customPromptScope'
+
+	private static readonly DEFAULT_EXCLUDED_FOLDERS = [
+		'node_modules',
+		'.vscode',
+		'dist',
+		'build',
+		'out',
+		'.next',
+		'__pycache__',
+		'.cache',
+		'coverage',
+		'.nyc_output',
+		'vendor',
+		'target',
+		'.idea',
+		'.DS_Store',
+		'.turbo',
+		'.svelte-kit',
+	].join('\n')
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -53,10 +82,13 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 
 	/** Loads excluded folders from workspace state. */
 	private _loadExcludedFolders(): string {
-		return this._context.workspaceState.get(
+		const saved = this._context.workspaceState.get<string>(
 			FileExplorerWebviewProvider.EXCLUDED_FOLDERS_KEY,
-			'',
 		)
+		if (saved === undefined || saved === null) {
+			return FileExplorerWebviewProvider.DEFAULT_EXCLUDED_FOLDERS
+		}
+		return saved
 	}
 
 	/** Saves both settings to workspace state. */
@@ -66,19 +98,57 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 			payload.excludedFolders,
 		)
 		await this._context.workspaceState.update(
+			FileExplorerWebviewProvider.EXCLUDED_EXTENSIONS_KEY,
+			payload.excludedExtensions,
+		)
+		await this._context.workspaceState.update(
 			FileExplorerWebviewProvider.READ_GITIGNORE_KEY,
 			payload.readGitignore,
+		)
+		await this._context.workspaceState.update(
+			FileExplorerWebviewProvider.CUSTOM_PROMPT_PROJECT_KEY,
+			payload.customPromptProject,
+		)
+		await this._context.globalState.update(
+			'promptforge.customPromptGlobal',
+			payload.customPromptGlobal,
+		)
+		await this._context.workspaceState.update(
+			FileExplorerWebviewProvider.CUSTOM_PROMPT_SCOPE_KEY,
+			payload.customPromptScope,
 		)
 	}
 
 	/** Loads both settings from workspace state with defaults. */
 	private _loadSettings(): UpdateSettingsPayload {
 		const excludedFolders = this._loadExcludedFolders()
+		const excludedExtensions = this._context.workspaceState.get(
+			FileExplorerWebviewProvider.EXCLUDED_EXTENSIONS_KEY,
+			'',
+		)
 		const readGitignore = this._context.workspaceState.get(
 			FileExplorerWebviewProvider.READ_GITIGNORE_KEY,
 			true,
 		)
-		return { excludedFolders, readGitignore }
+		const customPromptProject = this._context.workspaceState.get<string>(
+			FileExplorerWebviewProvider.CUSTOM_PROMPT_PROJECT_KEY,
+			'',
+		)
+		const customPromptGlobal = this._context.globalState.get<string>(
+			'promptforge.customPromptGlobal',
+			'',
+		)
+		const customPromptScope = this._context.workspaceState.get<
+			'project' | 'global'
+		>(FileExplorerWebviewProvider.CUSTOM_PROMPT_SCOPE_KEY, 'global')
+		return {
+			excludedFolders,
+			excludedExtensions,
+			readGitignore,
+			customPromptProject,
+			customPromptGlobal,
+			customPromptScope,
+		}
 	}
 
 	public resolveWebviewView(
@@ -189,6 +259,17 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 						await this._handlePreviewRowChange(
 							message.payload as { responseText: string; rowIndex: number },
 						)
+						break
+					case 'savePrompt':
+						await this._handleSavePrompt(message.payload as SavePromptPayload)
+						break
+					case 'deletePrompt':
+						await this._handleDeletePrompt(
+							message.payload as DeletePromptPayload,
+						)
+						break
+					case 'getPrompts':
+						await this._handleGetPrompts()
 						break
 					default:
 						console.warn('Received unknown message command:', message.command)
@@ -445,13 +526,25 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 			})
 
 			// Race the tree building against the timeout
+			const settings = this._loadSettings()
+
 			const excludedFoldersArray = payload?.excludedFolders
 				? payload.excludedFolders
 						.split(/\r?\n/)
 						.map((line) => line.trim())
 						.filter((line) => line.length > 0 && !line.startsWith('#'))
-				: this._loadSettings()
-						.excludedFolders.split(/\r?\n/)
+				: settings.excludedFolders
+						.split(/\r?\n/)
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0 && !line.startsWith('#'))
+
+			const excludedExtensionsArray = payload?.excludedExtensions
+				? payload.excludedExtensions
+						.split(/\r?\n/)
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0 && !line.startsWith('#'))
+				: settings.excludedExtensions
+						.split(/\r?\n/)
 						.map((line) => line.trim())
 						.filter((line) => line.length > 0 && !line.startsWith('#'))
 
@@ -460,8 +553,8 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 
 			const workspaceFiles = await Promise.race([
 				getWorkspaceFileTree(allExcludedDirs, {
-					useGitignore:
-						payload?.readGitignore ?? this._loadSettings().readGitignore,
+					useGitignore: payload?.readGitignore ?? settings.readGitignore,
+					excludedExtensions: excludedExtensionsArray,
 				}),
 				timeoutPromise,
 			])
@@ -571,12 +664,21 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 				selectedUriStrings, // Pass Set of URI strings
 			)
 
+			// Load custom prompt based on scope
+			const settings = this._loadSettings()
+			const customPrompt =
+				settings.customPromptScope === 'project'
+					? settings.customPromptProject
+					: settings.customPromptGlobal
+
 			// Generate the final prompt
 			const prompt = generatePrompt(
 				fileMap,
 				fileContents,
 				userInstructions,
 				includeXml,
+				payload.mode,
+				customPrompt,
 			)
 
 			// Copy to clipboard
@@ -830,6 +932,7 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 			this._view?.webview.postMessage({
 				command: 'applyRowChangeResult',
 				success: true,
+				rowIndex: payload.rowIndex,
 				results,
 			})
 
@@ -849,6 +952,7 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 			this._view?.webview.postMessage({
 				command: 'applyRowChangeResult',
 				success: false,
+				rowIndex: payload?.rowIndex,
 				errors: [error instanceof Error ? error.message : String(error)],
 			})
 		}
@@ -1105,6 +1209,61 @@ export class FileExplorerWebviewProvider implements vscode.WebviewViewProvider {
 				payload: { tokenCounts: {}, skippedFiles: [] },
 			})
 		}
+	}
+
+	/** Lấy danh sách saved prompts và gửi về webview */
+	private async _handleGetPrompts(): Promise<void> {
+		if (!this._view) return
+		const prompts = this._loadPrompts()
+		this._view.webview.postMessage({
+			command: 'updatePrompts',
+			payload: { prompts },
+		})
+	}
+
+	/** Lưu một prompt mới */
+	private async _handleSavePrompt(payload: SavePromptPayload): Promise<void> {
+		if (!this._view) return
+		const prompts = this._loadPrompts()
+		const newPrompt: SavedPrompt = {
+			id: `prompt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+			name: payload.name.trim() || 'Untitled',
+			content: payload.content,
+			createdAt: Date.now(),
+		}
+		prompts.push(newPrompt)
+		await this._context.workspaceState.update(
+			FileExplorerWebviewProvider.SAVED_PROMPTS_KEY,
+			prompts,
+		)
+		this._view.webview.postMessage({
+			command: 'updatePrompts',
+			payload: { prompts },
+		})
+	}
+
+	/** Xóa một prompt theo id */
+	private async _handleDeletePrompt(
+		payload: DeletePromptPayload,
+	): Promise<void> {
+		if (!this._view) return
+		const prompts = this._loadPrompts().filter((p) => p.id !== payload.id)
+		await this._context.workspaceState.update(
+			FileExplorerWebviewProvider.SAVED_PROMPTS_KEY,
+			prompts,
+		)
+		this._view.webview.postMessage({
+			command: 'updatePrompts',
+			payload: { prompts },
+		})
+	}
+
+	/** Load prompts từ workspace state */
+	private _loadPrompts(): SavedPrompt[] {
+		return this._context.workspaceState.get<SavedPrompt[]>(
+			FileExplorerWebviewProvider.SAVED_PROMPTS_KEY,
+			[],
+		)
 	}
 
 	/**

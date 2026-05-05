@@ -5,7 +5,12 @@ import { lintXmlText, preprocessXmlText } from './preprocess'
 import PreviewTable from './preview-table'
 import ResponseTextarea from './response-textarea'
 import ResultsDisplay from './results-display'
-import type { ApplyChangeResponse, ApplyResult, PreviewData } from './types'
+import type {
+	ApplyChangeResponse,
+	ApplyResult,
+	PreviewData,
+	RowResult,
+} from './types'
 
 interface ApplyTabProps {
 	onApply: (responseText: string) => void
@@ -27,6 +32,7 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 	const [errors, setErrors] = useState<string[] | null>(null)
 	const [previewData, setPreviewData] = useState<PreviewData | null>(null)
 	const [lints, setLints] = useState<string[]>([])
+	const [rowResults, setRowResults] = useState<Record<number, RowResult>>({})
 
 	const handleApply = useCallback(() => {
 		if (!responseText.trim()) {
@@ -52,6 +58,7 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 		setIsPreviewing(true)
 		setErrors(null)
 		setPreviewData(null)
+		setRowResults({})
 
 		// Preprocess before previewing as well
 		const { text: cleaned, changes, issues } = preprocessXmlText(responseText)
@@ -125,7 +132,20 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 			}
 
 			if (message.command === 'applyRowChangeResult') {
-				// Handle individual row apply result similar to full apply
+				const rowIdx = message.rowIndex
+				if (typeof rowIdx === 'number') {
+					const result = message.results?.[0]
+					setRowResults((prev) => ({
+						...prev,
+						[rowIdx]: {
+							success: message.success && (result?.success ?? false),
+							message:
+								result?.message || (message.errors?.[0] ?? 'Unknown error'),
+							errors: message.errors,
+						},
+					}))
+				}
+				// Cũng update results/errors chung để ResultsDisplay vẫn hoạt động
 				if (message.success) {
 					setResults(message.results || [])
 					setErrors(null)
@@ -200,6 +220,7 @@ const ApplyTab: React.FC<ApplyTabProps> = ({
 						onApplyRow={handleApplyRow}
 						onPreviewRow={handlePreviewRow}
 						isApplying={isApplying}
+						rowResults={rowResults}
 					/>
 				) : (
 					<ResultsDisplay results={results} errors={errors} />
