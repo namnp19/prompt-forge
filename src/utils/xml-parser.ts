@@ -221,11 +221,16 @@ function extractBetweenMarkers(
 
 	// Step 3: Only repair closing markers AFTER the opening marker position.
 	// Split into before/after and only mutate the "after" portion.
+	// IMPORTANT: Only auto-heal truncated markers when no real closing marker exists.
+	// If ">>>" is already present, healing standalone ">" or ">>" lines would corrupt
+	// valid code content (e.g. JSX/HTML multiline tags closing with bare ">").
 	const before = s.slice(0, first + start.length)
-	const after = s
-		.slice(first + start.length)
-		.replace(/^[ \t]*>\s*$/gm, '>>>')
-		.replace(/^[ \t]*>>\s*$/gm, '>>>')
+	let after = s.slice(first + start.length)
+	if (!after.includes(end)) {
+		after = after
+			.replace(/^[ \t]*>\s*$/gm, '>>>')
+			.replace(/^[ \t]*>>\s*$/gm, '>>>')
+	}
 
 	const repaired = before + after
 
